@@ -176,7 +176,7 @@ def prompt_endpoints(config: Config) -> bool:
     config.ip_iran = ip_iran
     config.ip_kharej = ip_kharej
     
-    # Iran interface IP (only if IRAN role)
+    # Interface IP configuration based on role
     if config.role == "IRAN":
         console.print("\n[dim]Configure tunnel interface IP (for l2tpeth0)[/]")
         default_iface = config.iran_iface_ip
@@ -193,6 +193,15 @@ def prompt_endpoints(config: Config) -> bool:
             default=default_remote
         )
         config.remote_forward_ip = remote_ip
+    
+    elif config.role == "KHAREJ":
+        console.print("\n[dim]Configure tunnel interface IP (for l2tpeth0)[/]")
+        default_iface = config.kharej_iface_ip
+        kharej_iface = Prompt.ask(
+            "[bold cyan]Kharej l2tpeth0 IP (CIDR)[/]",
+            default=default_iface
+        )
+        config.kharej_iface_ip = kharej_iface
     
     console.print("\n[green]✓ Configuration saved![/]")
     return True

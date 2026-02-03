@@ -223,12 +223,14 @@ class TunnelManager:
         return True, f"Interface {INTERFACE_NAME} is up"
     
     def assign_ip(self, ip_cidr: str = None) -> Tuple[bool, str]:
-        """Assign IP address to l2tpeth0 (Iran side only)."""
-        if self.config.role != "IRAN":
-            return False, "IP assignment is only for IRAN side"
-        
+        """Assign IP address to l2tpeth0 interface."""
         if ip_cidr is None:
-            ip_cidr = self.config.iran_iface_ip
+            if self.config.role == "IRAN":
+                ip_cidr = self.config.iran_iface_ip
+            elif self.config.role == "KHAREJ":
+                ip_cidr = self.config.kharej_iface_ip
+            else:
+                return False, "Role not configured"
         
         # Check if IP already assigned
         result = run_command(f"ip addr show {INTERFACE_NAME}")
@@ -308,12 +310,11 @@ class TunnelManager:
         if not success:
             return False, "\n".join(steps)
         
-        # Assign IP (Iran side only)
-        if self.config.role == "IRAN":
-            success, msg = self.assign_ip()
-            steps.append(f"Assign IP: {msg}")
-            if not success:
-                return False, "\n".join(steps)
+        # Assign IP (for both IRAN and KHAREJ)
+        success, msg = self.assign_ip()
+        steps.append(f"Assign IP: {msg}")
+        if not success:
+            return False, "\n".join(steps)
         
         steps.append("\n✓ Tunnel setup complete!")
         return True, "\n".join(steps)

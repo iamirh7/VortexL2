@@ -26,7 +26,8 @@ class Config:
         "role": None,  # "IRAN" or "KHAREJ"
         "ip_iran": None,
         "ip_kharej": None,
-        "iran_iface_ip": "10.30.30.1/30",
+        "iran_iface_ip": "10.30.30.1",
+        "kharej_iface_ip": "10.30.30.2",
         "remote_forward_ip": "10.30.30.2",
         "forwarded_ports": [],
     }
@@ -97,11 +98,20 @@ class Config:
     
     @property
     def iran_iface_ip(self) -> str:
-        return self._config.get("iran_iface_ip", "10.30.30.1/30")
+        return self._config.get("iran_iface_ip", "10.30.30.1")
     
     @iran_iface_ip.setter
     def iran_iface_ip(self, value: str) -> None:
         self._config["iran_iface_ip"] = value
+        self._save()
+    
+    @property
+    def kharej_iface_ip(self) -> str:
+        return self._config.get("kharej_iface_ip", "10.30.30.2")
+    
+    @kharej_iface_ip.setter
+    def kharej_iface_ip(self, value: str) -> None:
+        self._config["kharej_iface_ip"] = value
         self._save()
     
     @property

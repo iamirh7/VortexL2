@@ -138,7 +138,7 @@ def handle_delete_tunnel(config: Config, tunnel: TunnelManager, forward: Forward
     """Handle tunnel deletion."""
     ui.show_banner(config)
     
-    if not ui.confirm("Are you sure you want to delete the tunnel?", default=False):
+    if not ui.confirm("Are you sure you want to delete the tunnel and clear all config?", default=False):
         return
     
     # Stop forwards first if Iran
@@ -151,8 +151,14 @@ def handle_delete_tunnel(config: Config, tunnel: TunnelManager, forward: Forward
     success, msg = tunnel.full_teardown()
     ui.show_output(msg, "Tunnel Teardown")
     
+    # Clear all config
+    config.ip_iran = None
+    config.ip_kharej = None
+    config.role = None
+    config.forwarded_ports = []
+    
     if success:
-        ui.show_success("Tunnel deleted successfully")
+        ui.show_success("Tunnel deleted and config cleared successfully")
     else:
         ui.show_error("Tunnel deletion failed")
     

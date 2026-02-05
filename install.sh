@@ -51,7 +51,8 @@ fi
 
 echo -e "${YELLOW}[1/6] Installing system dependencies...${NC}"
 apt-get update -qq
-apt-get install -y -qq python3 python3-pip python3-venv git iproute2
+# Include haproxy for high-performance port forwarding
+apt-get install -y -qq python3 python3-pip python3-venv git iproute2 haproxy
 
 # Install kernel modules package
 KERNEL_VERSION=$(uname -r)
@@ -126,9 +127,12 @@ mkdir -p "$CONFIG_DIR"
 mkdir -p "$CONFIG_DIR/tunnels"
 mkdir -p /var/lib/vortexl2
 mkdir -p /var/log/vortexl2
+mkdir -p /etc/vortexl2/haproxy
 chmod 700 "$CONFIG_DIR"
 chmod 755 /var/lib/vortexl2
 chmod 755 /var/log/vortexl2
+chown root:root /etc/vortexl2/haproxy || true
+chmod 755 /etc/vortexl2/haproxy || true
 
 # Reload systemd
 systemctl daemon-reload
@@ -139,6 +143,7 @@ rm -f "$SYSTEMD_DIR/vortexl2-forward@.service" 2>/dev/null || true
 # Enable services
 systemctl enable vortexl2-tunnel.service 2>/dev/null || true
 systemctl enable vortexl2-forward-daemon.service 2>/dev/null || true
+systemctl enable haproxy 2>/dev/null || true
 
 # Start/Restart services
 echo -e "${YELLOW}Starting VortexL2 services...${NC}"
@@ -160,6 +165,15 @@ if systemctl is-active --quiet vortexl2-forward-daemon.service 2>/dev/null; then
 else
     systemctl start vortexl2-forward-daemon.service 2>/dev/null || true
     echo -e "${GREEN}  ✓ vortexl2-forward-daemon service started${NC}"
+fi
+
+# Ensure HAProxy service is running (required for port forwarding)
+if systemctl is-active --quiet haproxy 2>/dev/null; then
+    systemctl restart haproxy
+    echo -e "${GREEN}  ✓ haproxy service restarted${NC}"
+else
+    systemctl start haproxy 2>/dev/null || true
+    echo -e "${GREEN}  ✓ haproxy service started${NC}"
 fi
 
 echo ""

@@ -2,16 +2,16 @@
 """
 VortexL2 Forward Daemon
 
-Applies nftables rules for kernel-level port forwarding on startup.
-This replaces the asyncio-based user-space proxy with kernel NAT.
+Runs the asyncio-based port forwarding servers as a daemon service.
+This replaces the individual socat systemd services.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import signal
 import sys
-import time
 from pathlib import Path
 
 # Add parent directory to path
@@ -20,16 +20,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from vortexl2.config import ConfigManager
 from vortexl2.forward import ForwardManager
 
-# Ensure log directory exists
-LOG_DIR = Path("/var/log/vortexl2")
-LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(LOG_DIR / 'forward-daemon.log'),
+        logging.FileHandler('/var/log/vortexl2/forward-daemon.log'),
         logging.StreamHandler()
     ]
 )
@@ -37,109 +34,92 @@ logger = logging.getLogger(__name__)
 
 
 class ForwardDaemon:
-    """Manages nftables-based port forwarding."""
+    """Manages the forward daemon."""
     
     def __init__(self):
         self.config_manager = ConfigManager()
+        self.forward_managers = {}
         self.running = False
     
-    def apply_all_rules(self) -> bool:
-        """Apply nftables rules for all configured tunnels."""
-        logger.info("Applying nftables port forwarding rules")
+    async def start(self):
+        """Start the forward daemon."""
+        logger.info("Starting VortexL2 Forward Daemon")
         
+        # Ensure HAProxy is running before we try to manage it
+        logger.info("Ensuring HAProxy service is running...")
+        result = subprocess.run(
+            "systemctl start haproxy",
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            logger.warning(f"Could not ensure HAProxy is running: {result.stderr}")
+        
+        self.running = True
+        
+        # Get all tunnel configurations
         tunnels = self.config_manager.get_all_tunnels()
         
         if not tunnels:
             logger.warning("No tunnels configured")
-            return True
+            return
         
-        success_count = 0
-        for tunnel_config in tunnels:
-            if not tunnel_config.is_configured():
-                logger.warning(f"Tunnel '{tunnel_config.name}' not fully configured, skipping")
-                continue
-            
-            if not tunnel_config.forwarded_ports:
-                logger.debug(f"Tunnel '{tunnel_config.name}' has no forwarded ports")
-                continue
-            
-            forward_manager = ForwardManager(tunnel_config)
-            
-            logger.info(f"Applying rules for tunnel '{tunnel_config.name}': "
-                       f"{len(tunnel_config.forwarded_ports)} ports -> {tunnel_config.remote_forward_ip}")
-            
-            success, msg = forward_manager.apply_rules()
-            if success:
-                logger.info(f"Tunnel '{tunnel_config.name}': {msg}")
-                success_count += 1
-            else:
-                logger.error(f"Tunnel '{tunnel_config.name}': {msg}")
+        # Create a single forward manager that manages HAProxy for all tunnels
+        forward_manager = ForwardManager(self.config_manager)
+        self.forward_managers['haproxy_manager'] = forward_manager
+
+        logger.info("Starting HAProxy forwards for all configured tunnels")
+        success, msg = await forward_manager.start_all_forwards()
+        if not success:
+            logger.error(f"Failed to start port forwards: {msg}")
+        else:
+            logger.info(msg)
         
-        logger.info(f"Applied rules for {success_count} tunnel(s)")
-        return success_count > 0
-    
-    def start(self):
-        """Start the daemon - apply rules and stay alive."""
-        logger.info("Starting VortexL2 Forward Daemon (nftables)")
-        self.running = True
+        logger.info("Forward Daemon started successfully")
         
-        # Apply rules on startup
-        self.apply_all_rules()
-        
-        logger.info("Forward Daemon running (nftables rules applied)")
-        
-        # Keep running to maintain systemd service status
+        # Keep running
         try:
             while self.running:
-                time.sleep(60)
-                # Periodic health check - verify rules are still loaded
-                self._health_check()
-        except KeyboardInterrupt:
-            logger.info("Interrupted by user")
-        
-        logger.info("Forward Daemon stopped")
-    
-    def _health_check(self):
-        """Periodically verify rules are still active."""
-        try:
-            import subprocess
-            result = subprocess.run(
-                "nft list table ip vortexl2_nat 2>/dev/null",
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            if result.returncode != 0:
-                logger.warning("nftables rules not found, re-applying...")
-                self.apply_all_rules()
+                await asyncio.sleep(1)
         except Exception as e:
-            logger.debug(f"Health check error: {e}")
+            logger.error(f"Error in forward daemon: {e}")
     
-    def stop(self):
-        """Stop the daemon."""
+    async def stop(self):
+        """Stop the forward daemon."""
         logger.info("Stopping VortexL2 Forward Daemon")
         self.running = False
+        
+        # Stop the HAProxy manager
+        fm = self.forward_managers.get('haproxy_manager')
+        if fm:
+            logger.info("Stopping HAProxy forwards")
+            await fm.stop_all_forwards()
+        
+        logger.info("Forward Daemon stopped")
 
 
-def main():
+async def main():
     """Main entry point."""
     daemon = ForwardDaemon()
     
     # Setup signal handlers
     def handle_signal(sig, frame):
         logger.info(f"Received signal {sig}")
-        daemon.stop()
+        asyncio.create_task(daemon.stop())
     
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
     
     try:
-        daemon.start()
+        await daemon.start()
+    except KeyboardInterrupt:
+        logger.info("Interrupted by user")
+        await daemon.stop()
     except Exception as e:
         logger.error(f"Fatal error: {e}")
         sys.exit(1)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

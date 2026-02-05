@@ -17,7 +17,7 @@ A modular, production-quality CLI tool for managing multiple L2TPv3 tunnels and 
 
 - 🔧 Interactive TUI management panel with Rich
 - 🌐 **Multiple L2TPv3 tunnels** on a single server
-- 🔀 Async Python TCP port forwarding (high-performance)
+- 🔀 Port forwarding via HAProxy (production-grade)
 - 🔄 Systemd integration for persistence
 - 📦 One-liner installation
 - 🛡️ Duplicate validation for tunnel IDs, session IDs, and IPs
@@ -116,10 +116,11 @@ ping 10.30.30.2  # From IRAN side
 ### Check Port Forwards
 
 ```bash
-# List listening ports
-ss -ltnp | grep python
+# List listening ports (HAProxy)
+ss -ltnp | grep haproxy
 
-# Check forward-daemon service
+# Check services
+sudo systemctl status haproxy
 sudo systemctl status vortexl2-forward-daemon
 ```
 

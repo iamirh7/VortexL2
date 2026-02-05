@@ -135,10 +135,15 @@ class ForwardServer:
                          writer: asyncio.StreamWriter,
                          session: ForwardSession,
                          direction: str):
-        """Relay data between two connections."""
+        """Relay data between two connections with optimized buffering."""
         try:
+            # Use larger buffer size for better throughput (64KB instead of 4KB)
+            BUFFER_SIZE = 65536
+            drain_threshold = 262144  # 256KB - drain only when buffer gets large
+            pending_bytes = 0
+            
             while True:
-                data = await asyncio.wait_for(reader.read(4096), timeout=300)
+                data = await asyncio.wait_for(reader.read(BUFFER_SIZE), timeout=60)
                 if not data:
                     break
                 
@@ -151,6 +156,15 @@ class ForwardServer:
                     self.stats["total_bytes_received"] += len(data)
                 
                 writer.write(data)
+                pending_bytes += len(data)
+                
+                # Only drain periodically instead of after every write
+                if pending_bytes >= drain_threshold:
+                    await writer.drain()
+                    pending_bytes = 0
+            
+            # Final drain to ensure all data is sent
+            if pending_bytes > 0:
                 await writer.drain()
         except asyncio.TimeoutError:
             logger.debug(f"Timeout on {direction}")

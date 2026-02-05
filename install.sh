@@ -133,15 +133,28 @@ chmod 755 /var/log/vortexl2
 # Reload systemd
 systemctl daemon-reload
 
-# Enable tunnel service
+# Remove old service files (cleanup from previous versions)
+rm -f "$SYSTEMD_DIR/vortexl2-forward@.service" 2>/dev/null || true
+
+# Enable services
 systemctl enable vortexl2-tunnel.service 2>/dev/null || true
 systemctl enable vortexl2-forward-daemon.service 2>/dev/null || true
 
-# Restart service if it was already running (for updates)
+# Restart services if already running (for updates)
+RESTART_MSG=""
 if systemctl is-active --quiet vortexl2-tunnel.service 2>/dev/null; then
-    echo -e "${YELLOW}Restarting VortexL2 service...${NC}"
     systemctl restart vortexl2-tunnel.service
-    echo -e "${GREEN}Service restarted successfully${NC}"
+    RESTART_MSG="${RESTART_MSG}tunnel "
+fi
+
+if systemctl is-active --quiet vortexl2-forward-daemon.service 2>/dev/null; then
+    systemctl restart vortexl2-forward-daemon.service
+    RESTART_MSG="${RESTART_MSG}forward-daemon "
+fi
+
+if [ -n "$RESTART_MSG" ]; then
+    echo -e "${YELLOW}Restarted services: ${RESTART_MSG}${NC}"
+    echo -e "${GREEN}Services restarted successfully${NC}"
 fi
 
 echo ""

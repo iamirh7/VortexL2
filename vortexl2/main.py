@@ -62,8 +62,12 @@ def cmd_apply():
         if not success:
             errors += 1
             continue
+        
+        # Setup forwards if configured
+        if config.forwarded_ports:
+            success, msg = forward.start_all_forwards()
+            print(f"Port forwards: {msg}")
     
-    print("VortexL2: Tunnel setup complete. Port forwarding is handled by forward-daemon service")
     return 1 if errors > 0 else 0
 
 
@@ -110,7 +114,7 @@ def handle_create_tunnel(manager: ConfigManager):
     ui.show_info(f"Tunnel '{name}' will use interface {config.interface_name}")
     
     # Configure tunnel based on side
-    if not ui.prompt_tunnel_config(config, side):
+    if not ui.prompt_tunnel_config(config, side, manager):
         # User cancelled or error - no config file was created
         ui.show_error("Configuration cancelled.")
         ui.wait_for_enter()

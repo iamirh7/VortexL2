@@ -32,7 +32,7 @@ Method 1: Direct Installation
 
 ```bash
 # Download and run installation script
-curl -sSL https://raw.githubusercontent.com/karenserver71/VortexL2/main/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/iamirh7/VortexL2/main/install.sh | sudo bash
 ```
 
 Method 2: Manual Installation
